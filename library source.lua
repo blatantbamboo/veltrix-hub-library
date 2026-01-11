@@ -5,9 +5,36 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local HttpService = game:GetService("HttpService")
 
 local VeltrixHub = {}
 VeltrixHub.__index = VeltrixHub
+
+-- Configuration Manager
+local ConfigManager = {
+    FolderName = "VeltrixHub",
+    ConfigName = "default.json"
+}
+
+function ConfigManager:Save(data)
+    local success, err = pcall(function()
+        if not isfolder(self.FolderName) then
+            makefolder(self.FolderName)
+        end
+        writefile(self.FolderName .. "/" .. self.ConfigName, HttpService:JSONEncode(data))
+    end)
+    return success
+end
+
+function ConfigManager:Load()
+    local success, result = pcall(function()
+        if isfile(self.FolderName .. "/" .. self.ConfigName) then
+            return HttpService:JSONDecode(readfile(self.FolderName .. "/" .. self.ConfigName))
+        end
+        return nil
+    end)
+    return success and result or nil
+end
 
 -- Create Main Hub
 function VeltrixHub:CreateHub(hubName)
@@ -17,6 +44,19 @@ function VeltrixHub:CreateHub(hubName)
     self.Tabs = {}
     self.CurrentTab = nil
     self.IsVisible = true
+    self.ToggleKeybind = Enum.KeyCode.RightControl
+    self.CurrentTheme = "Red"
+    self.ConfigData = {}
+    
+    -- Themes
+    self.Themes = {
+        Red = {Primary = Color3.fromRGB(255, 80, 80), Dark = Color3.fromRGB(200, 50, 50)},
+        Blue = {Primary = Color3.fromRGB(80, 120, 255), Dark = Color3.fromRGB(50, 90, 200)},
+        Green = {Primary = Color3.fromRGB(80, 255, 120), Dark = Color3.fromRGB(50, 200, 90)},
+        Purple = {Primary = Color3.fromRGB(180, 80, 255), Dark = Color3.fromRGB(140, 50, 200)},
+        Orange = {Primary = Color3.fromRGB(255, 150, 80), Dark = Color3.fromRGB(200, 110, 50)},
+        Pink = {Primary = Color3.fromRGB(255, 100, 200), Dark = Color3.fromRGB(200, 70, 150)}
+    }
     
     -- Create ScreenGui
     self.ScreenGui = Instance.new("ScreenGui")
@@ -40,23 +80,23 @@ function VeltrixHub:CreateHub(hubName)
     mainCorner.Parent = self.MainFrame
     
     -- Title Bar
-    local titleBar = Instance.new("Frame")
-    titleBar.Name = "TitleBar"
-    titleBar.Size = UDim2.new(1, 0, 0, 50)
-    titleBar.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
-    titleBar.BorderSizePixel = 0
-    titleBar.Parent = self.MainFrame
+    self.TitleBar = Instance.new("Frame")
+    self.TitleBar.Name = "TitleBar"
+    self.TitleBar.Size = UDim2.new(1, 0, 0, 50)
+    self.TitleBar.BackgroundColor3 = self.Themes[self.CurrentTheme].Primary
+    self.TitleBar.BorderSizePixel = 0
+    self.TitleBar.Parent = self.MainFrame
     
     local titleCorner = Instance.new("UICorner")
     titleCorner.CornerRadius = UDim.new(0, 12)
-    titleCorner.Parent = titleBar
+    titleCorner.Parent = self.TitleBar
     
     local titleCover = Instance.new("Frame")
     titleCover.Size = UDim2.new(1, 0, 0, 25)
     titleCover.Position = UDim2.new(0, 0, 1, -25)
-    titleCover.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+    titleCover.BackgroundColor3 = self.Themes[self.CurrentTheme].Primary
     titleCover.BorderSizePixel = 0
-    titleCover.Parent = titleBar
+    titleCover.Parent = self.TitleBar
     
     -- Hub Name
     local hubLabel = Instance.new("TextLabel")
@@ -68,7 +108,7 @@ function VeltrixHub:CreateHub(hubName)
     hubLabel.TextSize = 20
     hubLabel.TextXAlignment = Enum.TextXAlignment.Left
     hubLabel.Font = Enum.Font.GothamBold
-    hubLabel.Parent = titleBar
+    hubLabel.Parent = self.TitleBar
     
     -- Creator Label
     local creatorLabel = Instance.new("TextLabel")
@@ -81,7 +121,7 @@ function VeltrixHub:CreateHub(hubName)
     creatorLabel.TextSize = 12
     creatorLabel.TextXAlignment = Enum.TextXAlignment.Left
     creatorLabel.Font = Enum.Font.Gotham
-    creatorLabel.Parent = titleBar
+    creatorLabel.Parent = self.TitleBar
     
     -- Close Button
     local closeButton = Instance.new("TextButton")
@@ -92,7 +132,7 @@ function VeltrixHub:CreateHub(hubName)
     closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
     closeButton.TextSize = 18
     closeButton.Font = Enum.Font.GothamBold
-    closeButton.Parent = titleBar
+    closeButton.Parent = self.TitleBar
     
     local closeCorner = Instance.new("UICorner")
     closeCorner.CornerRadius = UDim.new(0, 8)
@@ -112,11 +152,16 @@ function VeltrixHub:CreateHub(hubName)
     minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
     minimizeButton.TextSize = 20
     minimizeButton.Font = Enum.Font.GothamBold
-    minimizeButton.Parent = titleBar
+    minimizeButton.Parent = self.TitleBar
     
     local minimizeCorner = Instance.new("UICorner")
     minimizeCorner.CornerRadius = UDim.new(0, 8)
     minimizeCorner.Parent = minimizeButton
+    
+    minimizeButton.MouseButton1Click:Connect(function()
+        self.MainFrame.Visible = false
+        self.IsVisible = false
+    end)
     
     -- Tab Container
     self.TabContainer = Instance.new("Frame")
@@ -139,10 +184,19 @@ function VeltrixHub:CreateHub(hubName)
     self.ContentContainer.BackgroundTransparency = 1
     self.ContentContainer.Parent = self.MainFrame
     
+    -- Resize Handle
+    local resizeHandle = Instance.new("ImageButton")
+    resizeHandle.Size = UDim2.new(0, 20, 0, 20)
+    resizeHandle.Position = UDim2.new(1, -20, 1, -20)
+    resizeHandle.BackgroundTransparency = 1
+    resizeHandle.Image = "rbxassetid://7072706663"
+    resizeHandle.ImageColor3 = Color3.fromRGB(150, 150, 150)
+    resizeHandle.Parent = self.MainFrame
+    
     -- Make Draggable
     local dragging, dragInput, dragStart, startPos
     
-    titleBar.InputBegan:Connect(function(input)
+    self.TitleBar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = true
             dragStart = input.Position
@@ -156,7 +210,7 @@ function VeltrixHub:CreateHub(hubName)
         end
     end)
     
-    titleBar.InputChanged:Connect(function(input)
+    self.TitleBar.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement then
             dragInput = input
         end
@@ -174,22 +228,116 @@ function VeltrixHub:CreateHub(hubName)
         end
     end)
     
-    -- Toggle UI with Right Ctrl
+    -- Make Resizable
+    local resizing = false
+    local resizeStart, startSize
+    
+    resizeHandle.MouseButton1Down:Connect(function()
+        resizing = true
+        resizeStart = UserInputService:GetMouseLocation()
+        startSize = self.MainFrame.Size
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            resizing = false
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if resizing and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local currentMouse = UserInputService:GetMouseLocation()
+            local delta = currentMouse - resizeStart
+            
+            local newWidth = math.max(450, startSize.X.Offset + delta.X)
+            local newHeight = math.max(350, startSize.Y.Offset + delta.Y)
+            
+            self.MainFrame.Size = UDim2.new(0, newWidth, 0, newHeight)
+        end
+    end)
+    
+    -- Toggle UI with Keybind
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if gameProcessed then return end
-        if input.KeyCode == Enum.KeyCode.RightControl then
+        if input.KeyCode == self.ToggleKeybind then
             self.IsVisible = not self.IsVisible
             self.MainFrame.Visible = self.IsVisible
         end
     end)
     
+    -- Load saved config
+    local savedConfig = ConfigManager:Load()
+    if savedConfig then
+        if savedConfig.Theme then
+            self:SetTheme(savedConfig.Theme)
+        end
+        if savedConfig.Keybind then
+            self.ToggleKeybind = Enum.KeyCode[savedConfig.Keybind]
+        end
+        if savedConfig.Size then
+            self.MainFrame.Size = UDim2.new(0, savedConfig.Size.X, 0, savedConfig.Size.Y)
+        end
+        if savedConfig.Position then
+            self.MainFrame.Position = UDim2.new(0, savedConfig.Position.X, 0, savedConfig.Position.Y)
+        end
+    end
+    
     print("====================================")
     print("Veltrix Hub Loaded!")
     print("Created by kingveltroh")
-    print("Press RIGHT CTRL to toggle UI")
+    print("Press " .. self.ToggleKeybind.Name .. " to toggle UI")
     print("====================================")
     
     return self
+end
+
+-- Set Theme
+function VeltrixHub:SetTheme(themeName)
+    if not self.Themes[themeName] then return end
+    
+    self.CurrentTheme = themeName
+    local theme = self.Themes[themeName]
+    
+    TweenService:Create(self.TitleBar, TweenInfo.new(0.3), {
+        BackgroundColor3 = theme.Primary
+    }):Play()
+    
+    TweenService:Create(self.TitleBar:FindFirstChild("Frame"), TweenInfo.new(0.3), {
+        BackgroundColor3 = theme.Primary
+    }):Play()
+    
+    -- Update all active tabs and toggles
+    for _, tab in ipairs(self.Tabs) do
+        if tab.Button.BackgroundColor3 ~= Color3.fromRGB(35, 35, 40) then
+            TweenService:Create(tab.Button, TweenInfo.new(0.3), {
+                BackgroundColor3 = theme.Primary
+            }):Play()
+        end
+    end
+    
+    self:SaveConfig()
+end
+
+-- Save Config
+function VeltrixHub:SaveConfig()
+    local configData = {
+        Theme = self.CurrentTheme,
+        Keybind = self.ToggleKeybind.Name,
+        Size = {
+            X = self.MainFrame.Size.X.Offset,
+            Y = self.MainFrame.Size.Y.Offset
+        },
+        Position = {
+            X = self.MainFrame.Position.X.Offset,
+            Y = self.MainFrame.Position.Y.Offset
+        }
+    }
+    
+    for key, value in pairs(self.ConfigData) do
+        configData[key] = value
+    end
+    
+    ConfigManager:Save(configData)
 end
 
 -- Create Tab
@@ -222,7 +370,7 @@ function VeltrixHub:CreateTab(tabName)
     contentFrame.BackgroundTransparency = 1
     contentFrame.BorderSizePixel = 0
     contentFrame.ScrollBarThickness = 4
-    contentFrame.ScrollBarImageColor3 = Color3.fromRGB(255, 80, 80)
+    contentFrame.ScrollBarImageColor3 = self.Themes[self.CurrentTheme].Primary
     contentFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
     contentFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
     contentFrame.Visible = false
@@ -257,12 +405,20 @@ function VeltrixHub:SelectTab(tab)
     end
     
     tab.Container.Visible = true
-    tab.Button.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+    tab.Button.BackgroundColor3 = self.Themes[self.CurrentTheme].Primary
     self.CurrentTab = tab
 end
 
 -- Create Toggle
 function VeltrixHub:CreateToggle(tab, labelText, defaultValue, callback)
+    local configKey = "Toggle_" .. labelText:gsub(" ", "_")
+    
+    -- Load saved value
+    local savedConfig = ConfigManager:Load()
+    if savedConfig and savedConfig[configKey] ~= nil then
+        defaultValue = savedConfig[configKey]
+    end
+    
     local toggleFrame = Instance.new("Frame")
     toggleFrame.Size = UDim2.new(1, -10, 0, 45)
     toggleFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
@@ -287,7 +443,7 @@ function VeltrixHub:CreateToggle(tab, labelText, defaultValue, callback)
     local toggleButton = Instance.new("TextButton")
     toggleButton.Size = UDim2.new(0, 45, 0, 22)
     toggleButton.Position = UDim2.new(1, -55, 0.5, -11)
-    toggleButton.BackgroundColor3 = defaultValue and Color3.fromRGB(255, 80, 80) or Color3.fromRGB(50, 50, 55)
+    toggleButton.BackgroundColor3 = defaultValue and self.Themes[self.CurrentTheme].Primary or Color3.fromRGB(50, 50, 55)
     toggleButton.Text = ""
     toggleButton.AutoButtonColor = false
     toggleButton.Parent = toggleFrame
@@ -313,15 +469,23 @@ function VeltrixHub:CreateToggle(tab, labelText, defaultValue, callback)
         isOn = not isOn
         
         TweenService:Create(toggleButton, TweenInfo.new(0.2), {
-            BackgroundColor3 = isOn and Color3.fromRGB(255, 80, 80) or Color3.fromRGB(50, 50, 55)
+            BackgroundColor3 = isOn and self.Themes[self.CurrentTheme].Primary or Color3.fromRGB(50, 50, 55)
         }):Play()
         
         TweenService:Create(toggleCircle, TweenInfo.new(0.2), {
             Position = isOn and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)
         }):Play()
         
+        self.ConfigData[configKey] = isOn
+        self:SaveConfig()
+        
         callback(isOn)
     end)
+    
+    -- Call callback with default value
+    if defaultValue then
+        callback(defaultValue)
+    end
     
     return toggleFrame
 end
@@ -330,7 +494,7 @@ end
 function VeltrixHub:CreateButton(tab, buttonText, callback)
     local buttonFrame = Instance.new("TextButton")
     buttonFrame.Size = UDim2.new(1, -10, 0, 45)
-    buttonFrame.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+    buttonFrame.BackgroundColor3 = self.Themes[self.CurrentTheme].Primary
     buttonFrame.BorderSizePixel = 0
     buttonFrame.Text = buttonText
     buttonFrame.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -345,13 +509,13 @@ function VeltrixHub:CreateButton(tab, buttonText, callback)
     
     buttonFrame.MouseButton1Click:Connect(function()
         TweenService:Create(buttonFrame, TweenInfo.new(0.1), {
-            BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+            BackgroundColor3 = self.Themes[self.CurrentTheme].Dark
         }):Play()
         
         wait(0.1)
         
         TweenService:Create(buttonFrame, TweenInfo.new(0.1), {
-            BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+            BackgroundColor3 = self.Themes[self.CurrentTheme].Primary
         }):Play()
         
         callback()
@@ -362,6 +526,14 @@ end
 
 -- Create Slider
 function VeltrixHub:CreateSlider(tab, labelText, minValue, maxValue, defaultValue, callback)
+    local configKey = "Slider_" .. labelText:gsub(" ", "_")
+    
+    -- Load saved value
+    local savedConfig = ConfigManager:Load()
+    if savedConfig and savedConfig[configKey] ~= nil then
+        defaultValue = savedConfig[configKey]
+    end
+    
     local sliderFrame = Instance.new("Frame")
     sliderFrame.Size = UDim2.new(1, -10, 0, 55)
     sliderFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
@@ -388,7 +560,7 @@ function VeltrixHub:CreateSlider(tab, labelText, minValue, maxValue, defaultValu
     valueLabel.Position = UDim2.new(0.6, 0, 0, 8)
     valueLabel.BackgroundTransparency = 1
     valueLabel.Text = tostring(defaultValue)
-    valueLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+    valueLabel.TextColor3 = self.Themes[self.CurrentTheme].Primary
     valueLabel.TextSize = 14
     valueLabel.TextXAlignment = Enum.TextXAlignment.Right
     valueLabel.Font = Enum.Font.GothamBold
@@ -407,7 +579,7 @@ function VeltrixHub:CreateSlider(tab, labelText, minValue, maxValue, defaultValu
     
     local sliderFill = Instance.new("Frame")
     sliderFill.Size = UDim2.new((defaultValue - minValue) / (maxValue - minValue), 0, 1, 0)
-    sliderFill.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+    sliderFill.BackgroundColor3 = self.Themes[self.CurrentTheme].Primary
     sliderFill.BorderSizePixel = 0
     sliderFill.Parent = sliderBar
     
@@ -438,6 +610,9 @@ function VeltrixHub:CreateSlider(tab, labelText, minValue, maxValue, defaultValu
         sliderFill.Size = UDim2.new(relativeX, 0, 1, 0)
         sliderButton.Position = UDim2.new(relativeX, -9, 0.5, -9)
         
+        self.ConfigData[configKey] = value
+        self:SaveConfig()
+        
         callback(value)
     end
     
@@ -462,6 +637,11 @@ function VeltrixHub:CreateSlider(tab, labelText, minValue, maxValue, defaultValu
             updateSlider(input)
         end
     end)
+    
+    -- Call callback with default value
+    if defaultValue then
+        callback(defaultValue)
+    end
     
     return sliderFrame
 end
@@ -492,4 +672,11 @@ function VeltrixHub:CreateLabel(tab, labelText)
     return labelFrame
 end
 
-return VeltrixHub
+-- Create Dropdown
+function VeltrixHub:CreateDropdown(tab, labelText, options, defaultOption, callback)
+    local configKey = "Dropdown_" .. labelText:gsub(" ", "_")
+    
+    -- Load saved value
+    local savedConfig = ConfigManager:Load()
+    if savedConfig and savedConfig[configKey] then
+        defaultOption = savedConfig[
